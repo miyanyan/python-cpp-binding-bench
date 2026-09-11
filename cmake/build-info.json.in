@@ -1,0 +1,12 @@
+{
+  "python": "@Python_VERSION@",
+  "pybind11": "@pybind11_VERSION@",
+  "nanobind": "@nanobind_VERSION@",
+  "cython": "@CYTHON_VERSION@",
+  "compiler": "@CMAKE_CXX_COMPILER_ID@ @CMAKE_CXX_COMPILER_VERSION@",
+  "profile": "@BENCH_PROFILE@",
+  "build_type": "@CMAKE_BUILD_TYPE@",
+  "matched": "@BENCH_MATCHED@",
+  "scale_count": "@BENCH_SCALE_COUNT@",
+  "scale_kind": "@BENCH_SCALE_KIND@"
+}

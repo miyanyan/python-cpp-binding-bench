@@ -1,0 +1,31 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {"major": 3, "minor": 30, "patch": 0},
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/$env{PIXI_ENVIRONMENT_NAME}/${presetName}",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "$env{BENCH_CXX}",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "VCPKG_OVERLAY_PORTS": "${sourceDir}/overlay-ports",
+        "VCPKG_INSTALLED_DIR": "${sourceDir}/build/vcpkg_installed",
+        "Python_EXECUTABLE": "$env{BENCH_PYTHON}",
+        "Python_ROOT_DIR": "$env{CONDA_PREFIX}",
+        "Python_FIND_REGISTRY": "NEVER",
+        "Python_FIND_STRATEGY": "LOCATION",
+        "BENCH_PROFILE": "${presetName}"
+      }
+    },
+    {"name": "matched", "inherits": "base", "cacheVariables": {"BENCH_MATCHED": "ON"}},
+    {"name": "native", "inherits": "base", "cacheVariables": {"BENCH_MATCHED": "OFF"}}
+  ],
+  "buildPresets": [
+    {"name": "matched", "configurePreset": "matched"},
+    {"name": "native", "configurePreset": "native"}
+  ]
+}

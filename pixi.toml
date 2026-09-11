@@ -1,0 +1,46 @@
+[workspace]
+name = "python-cpp-binding-bench"
+version = "0.1.0"
+description = "Reproducible C++/Python binding benchmarks"
+channels = ["conda-forge"]
+platforms = ["win-64", "linux-64", "osx-arm64"]
+
+[dependencies]
+cmake = ">=3.30,<5"
+ninja = ">=1.12,<2"
+numpy = ">=2,<3"
+pyperf = ">=2.9,<3"
+matplotlib = ">=3.9,<4"
+pytest = ">=8,<10"
+cython = ">=3.1,<4"
+
+[feature.py310.dependencies]
+python = "3.10.*"
+[feature.py311.dependencies]
+python = "3.11.*"
+[feature.py312.dependencies]
+python = "3.12.*"
+[feature.py313.dependencies]
+python = "3.13.*"
+[feature.py314.dependencies]
+python = "3.14.*"
+
+[environments]
+default = ["py312"]
+py310 = ["py310"]
+py311 = ["py311"]
+py312 = ["py312"]
+py313 = ["py313"]
+py314 = ["py314"]
+
+[tasks]
+configure = "python scripts/project.py configure"
+build = "python scripts/project.py build"
+test = "python scripts/project.py test"
+bench = "python scripts/project.py bench"
+bench-quick = "python scripts/project.py bench --fast"
+bench-sdk = "python scripts/project.py sdk"
+bench-sdk-quick = "python scripts/project.py sdk --fast"
+report-sdk = "python scripts/report_sdk.py"
+report = "python scripts/report.py"
+scale = "python scripts/project.py scale"

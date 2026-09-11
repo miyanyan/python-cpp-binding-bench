@@ -1,0 +1,149 @@
+name: Cross-platform CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.platform.label }} / ${{ matrix.python }}
+    runs-on: ${{ matrix.platform.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - label: windows-x64-msvc
+            runner: windows-2022
+            triplet: x64-windows
+            compiler: cl
+          - label: linux-x64-gcc
+            runner: ubuntu-24.04
+            triplet: x64-linux
+            compiler: g++
+          - label: macos-arm64-clang
+            runner: macos-15
+            triplet: arm64-osx
+            compiler: clang++
+        python: [py310, py311, py312, py313, py314]
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      VCPKG_ROOT: ${{ github.workspace }}/.ci/vcpkg
+      VCPKG_DEFAULT_TRIPLET: ${{ matrix.platform.triplet }}
+      VCPKG_DEFAULT_HOST_TRIPLET: ${{ matrix.platform.triplet }}
+      VCPKG_DISABLE_METRICS: '1'
+      CXX: ${{ matrix.platform.compiler }}
+      BENCH_ENVIRONMENT: ${{ matrix.python }}
+      PIXI_LOCKED: 'true'
+
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Read pinned vcpkg baseline
+        id: vcpkg
+        run: |
+          $manifest = Get-Content -LiteralPath vcpkg.json -Raw | ConvertFrom-Json
+          $baseline = $manifest.'builtin-baseline'
+          if ($baseline -notmatch '^[0-9a-f]{40}$') {
+            throw 'vcpkg.json must contain a commit-pinned builtin-baseline.'
+          }
+          "baseline=$baseline" >> $env:GITHUB_OUTPUT
+
+      - name: Check out pinned vcpkg
+        uses: actions/checkout@v4
+        with:
+          repository: microsoft/vcpkg
+          ref: ${{ steps.vcpkg.outputs.baseline }}
+          path: .ci/vcpkg
+          persist-credentials: false
+
+      - name: Bootstrap vcpkg
+        run: |
+          if ($IsWindows) {
+            & "$env:VCPKG_ROOT/bootstrap-vcpkg.bat" -disableMetrics
+          } else {
+            & "$env:VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Install locked pixi environment
+        id: pixi
+        uses: prefix-dev/setup-pixi@v0.9.3
+        with:
+          pixi-version: v0.76.2
+          environments: ${{ matrix.python }}
+          locked: true
+          cache: true
+          cache-key: pixi-${{ matrix.platform.label }}-${{ matrix.python }}-
+
+      - name: Test matched configuration
+        env:
+          PYTEST_ADDOPTS: --junitxml=results/ci/test-matched.xml
+        run: pixi run --locked -e $env:BENCH_ENVIRONMENT test --profile matched --jobs 2
+
+      - name: Test native configuration
+        env:
+          PYTEST_ADDOPTS: --junitxml=results/ci/test-native.xml
+        run: pixi run --locked -e $env:BENCH_ENVIRONMENT test --profile native --jobs 2
+
+      - name: Verify vcpkg did not install Python
+        run: |
+          $status = Get-Content -LiteralPath build/vcpkg_installed/vcpkg/status -Raw
+          if ($status -match '(?m)^Package: python3\s*$') {
+            throw 'vcpkg installed Python; check the overlay port dependencies.'
+          }
+
+      # Shared runners validate execution and artifact generation, not performance thresholds.
+      - name: Three-way runtime benchmark smoke test (pybind11, nanobind, Cython)
+        if: matrix.python == 'py312'
+        run: pixi run --locked -e $env:BENCH_ENVIRONMENT bench-quick --jobs 2
+
+      - name: Function scale smoke test
+        if: matrix.python == 'py312'
+        run: pixi run --locked -e $env:BENCH_ENVIRONMENT scale --counts 1,10 --kind functions --repeats 1 --jobs 2
+
+      - name: SDK overload and ownership smoke test
+        if: matrix.python == 'py312'
+        run: pixi run --locked -e $env:BENCH_ENVIRONMENT bench-sdk-quick --jobs 2
+
+      - name: Class scale smoke test
+        if: matrix.python == 'py312'
+        run: pixi run --locked -e $env:BENCH_ENVIRONMENT scale --counts 1,10 --kind classes --repeats 1 --jobs 2
+
+      - name: Upload test results and build diagnostics
+        id: artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-${{ matrix.platform.label }}-${{ matrix.python }}
+          retention-days: 14
+          if-no-files-found: warn
+          include-hidden-files: true
+          path: |
+            results/
+            build/**/build-info*.json
+            build/**/toolchain-selection.json
+            build/**/compile_commands.json
+            build/**/CMakeFiles/CMakeConfigureLog.yaml
+            build/vcpkg_installed/vcpkg/status
+            .ci/vcpkg/buildtrees/**/*.log
+
+      - name: Show benchmark results in job summary
+        if: always() && matrix.python == 'py312' && steps.pixi.outcome == 'success'
+        env:
+          BENCH_SUMMARY_LABEL: ${{ matrix.platform.label }} / ${{ matrix.python }}
+          BENCH_ARTIFACT_URL: ${{ steps.artifacts.outputs.artifact-url }}
+        run: pixi run --locked -e $env:BENCH_ENVIRONMENT python scripts/ci_summary.py

@@ -1,0 +1,6 @@
+{
+  "name": "python-cpp-binding-bench",
+  "version-string": "0.1.0",
+  "builtin-baseline": "2890dc0b684a80c1d86cb8dad0c7434d2e77a5bb",
+  "dependencies": ["pybind11", "nanobind"]
+}
