@@ -140,6 +140,12 @@ def measure_scale(args, name):
         'python': sys.version, 'executable': sys.executable, 'platform': platform.platform(),
         'processor': platform.processor(), 'compiler_path': os.environ['BENCH_CXX'],
         'jobs': args.jobs, 'kind': args.kind, 'repeats': args.repeats,
+        'backends': ['py', 'nb', 'cy'], 'cython_version': __import__('Cython').__version__,
+        'counts': list(map(int, args.counts.split(','))),
+        'timing': 'Each stage includes cmake/build-tool launch overhead; clean/incremental totals are sums of stages. Fixture generation and configure excluded.',
+        'source_sha256': {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
+                          for p in [ROOT / 'scripts/generate_scale.py', ROOT / 'scripts/project.py',
+                                    ROOT / 'CMakeLists.txt', ROOT / 'CMakePresets.json', ROOT / 'pixi.lock', ROOT / 'vcpkg.json']},
         'scope': 'single translation unit; clean objects, warm filesystem; dependency configure/install excluded',
     }, indent=2), encoding='utf-8')
     for count in map(int, args.counts.split(',')):
@@ -150,24 +156,33 @@ def measure_scale(args, name):
         shutil.copy2(directory / 'build-info.json', output / f'build-info-{count}.json')
         shutil.copy2(directory / 'compile_commands.json', output / f'compile-commands-{count}.json')
         for repeat in range(args.repeats):
-            for backend in (('py', 'nb') if repeat % 2 == 0 else ('nb', 'py')):
+            backends = ['py', 'nb', 'cy']
+            order = backends[repeat % 3:] + backends[:repeat % 3]
+            for backend in order:
                 target = f'scale_{backend}'
                 run(['cmake', '--build', directory, '--target', 'clean'])
-                start = time.perf_counter()
-                run(['cmake', '--build', directory, '--target', target, '--parallel', args.jobs])
-                clean_seconds = time.perf_counter() - start
+                def stage(stage_target):
+                    start = time.perf_counter()
+                    run(['cmake', '--build', directory, '--target', stage_target, '--parallel', args.jobs])
+                    return time.perf_counter() - start
+                codegen_seconds = stage('scale_cy_codegen') if backend == 'cy' else 0.0
+                compile_seconds = stage(target)
+                clean_seconds = codegen_seconds + compile_seconds
                 module = next(p for p in (directory / 'modules').glob(f'{target}*') if p.suffix in ('.so', '.pyd'))
                 # A new process really imports and exercises a generated binding.
                 snippet = (f'import sys,time; sys.path.insert(0,{str(directory / "modules")!r}); '
                     f't=time.perf_counter(); import {target} as m; print(time.perf_counter()-t); '
-                    + (f'assert m.f0(3)==3; assert m.f{count-1}(3)=={count+2}' if args.kind == 'functions'
-                       else f'assert m.C0(3).get()==3; assert m.C{count-1}(3).get()=={count+2}'))
+                    + (f'assert all(getattr(m,"f"+str(i))(3)==3+i for i in range({count}))' if args.kind == 'functions'
+                       else f'assert all(getattr(m,"C"+str(i))(3).get()==3+i for i in range({count}))'))
                 imported = subprocess.check_output([sys.executable, '-c', snippet], text=True)
-                (directory / 'generated' / f'{backend}.cpp').touch()
-                start = time.perf_counter()
-                run(['cmake', '--build', directory, '--target', target, '--parallel', args.jobs])
+                (directory / 'generated' / f'{backend}{".pyx" if backend == "cy" else ".cpp"}').touch()
+                incremental_codegen = stage('scale_cy_codegen') if backend == 'cy' else 0.0
+                incremental_compile = stage(target)
+                subprocess.check_output([sys.executable, '-c', snippet], text=True)
                 row = dict(count=count, backend=backend, repeat=repeat, jobs=args.jobs,
-                           clean_seconds=clean_seconds, incremental_seconds=time.perf_counter()-start,
+                           order=order, codegen_seconds=codegen_seconds, compile_seconds=compile_seconds,
+                           incremental_codegen_seconds=incremental_codegen, incremental_compile_seconds=incremental_compile,
+                           clean_seconds=clean_seconds, incremental_seconds=incremental_codegen+incremental_compile,
                            import_seconds=float(imported.strip()), module_bytes=module.stat().st_size)
                 rows.append(row)
                 (output / 'scale.json').write_text(json.dumps(rows, indent=2), encoding='utf-8')

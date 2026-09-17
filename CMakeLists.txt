@@ -47,17 +47,30 @@ function(add_binding target backend source)
   set_target_properties(${target} PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/modules" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/modules")
 endfunction()
 
+execute_process(COMMAND "${Python_EXECUTABLE}" -c "import Cython; print(Cython.__version__)"
+  OUTPUT_VARIABLE CYTHON_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
 if(BENCH_SCALE_COUNT GREATER 0)
   execute_process(COMMAND "${Python_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate_scale.py"
     --output "${CMAKE_BINARY_DIR}/generated" --count "${BENCH_SCALE_COUNT}" --kind "${BENCH_SCALE_KIND}"
     COMMAND_ERROR_IS_FATAL ANY)
   add_binding(scale_py pybind11 "${CMAKE_BINARY_DIR}/generated/py.cpp")
   add_binding(scale_nb nanobind "${CMAKE_BINARY_DIR}/generated/nb.cpp")
+  add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/generated/cy.cpp"
+    COMMAND "${Python_EXECUTABLE}" -m cython --cplus -3 --module-name scale_cy
+      -o "${CMAKE_BINARY_DIR}/generated/cy.cpp" "${CMAKE_BINARY_DIR}/generated/cy.pyx"
+    DEPENDS "${CMAKE_BINARY_DIR}/generated/cy.pyx" "${CMAKE_CURRENT_SOURCE_DIR}/pixi.lock"
+    VERBATIM)
+  add_custom_target(scale_cy_codegen DEPENDS "${CMAKE_BINARY_DIR}/generated/cy.cpp")
+  Python_add_library(scale_cy MODULE WITH_SOABI "${CMAKE_BINARY_DIR}/generated/cy.cpp")
+  target_include_directories(scale_cy PRIVATE "${CMAKE_BINARY_DIR}/generated")
+  if(MSVC)
+    target_compile_options(scale_cy PRIVATE /bigobj)
+  endif()
+  set_target_properties(scale_cy PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/modules"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/modules")
 else()
   add_binding(bench_py pybind11 src/pybind.cpp)
   add_binding(bench_nb nanobind src/nanobind.cpp)
-  execute_process(COMMAND "${Python_EXECUTABLE}" -c "import Cython; print(Cython.__version__)"
-    OUTPUT_VARIABLE CYTHON_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
   set(cython_source "${CMAKE_BINARY_DIR}/generated/bench_cy.cpp")
   add_custom_command(OUTPUT "${cython_source}"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/generated"
