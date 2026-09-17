@@ -193,11 +193,13 @@ GitHub Actions 配置位于 `.github/workflows/ci.yml`，在 push、PR 和手动
   缺失或失败的套件不会显示为成功，需同时查看 job 状态。
 
 CI 运行器上的计时用于检查测量流程，不设性能阈值，也不用于跨平台性能排名。
-此工作流需推送到 GitHub 后才能验证远端平台；下述记录是本机已完成的验证。
+2026-09-17 已验证远端平台：[CI run 35230995425](https://github.com/miyanyan/python-cpp-binding-bench/actions/runs/35230995425)
+在提交 `ec7541b` 上 15/15 job 成功。三个平台 Python 3.12 的 artifact 已下载核对，
+包括 matched/native 测试、三方运行时报告、三方函数/类规模分阶段报告及 Summary 生成步骤。
 
 本机验证（2026-09-11）：Windows x64 / MSVC 19.51；Python 3.10.21、3.11.16、3.12.14、3.13.15、3.14.7
 在第一版中各通过 20 项正确性测试。Python 3.12 的 matched/native 配置均通过，40 组双库运行时用例和
-函数/类各 1、100 个绑定的规模扫描已完成冒烟验证。Linux/macOS 尚未实际构建验证。
+函数/类各 1、100 个绑定的规模扫描已完成冒烟验证；Linux/macOS 后续验证见上述 CI 记录。
 SDK 扩展后，Python 3.10、3.12、3.14 各通过 50 项正确性测试；3.12 的 matched/native 均通过。
 Cython 3.3.0 基础包装加入后，同三个 Python 版本各通过 72 项测试（含整数边界、
 非本机字节序数组拒绝、回调异常对象保留）；3.12 的 matched/native 均通过。
