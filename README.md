@@ -98,8 +98,8 @@ identity 返回已有 Python 包装。回调通过 `src/cython_bridge.h` 的 CPy
 整数测试覆盖 int64/uint64 边界与越界拒绝；测试输入不触发有符号加法溢出。
 这不是完整 Python API 兼容性测试，未承诺所有隐式类型转换规则相同。
 Cython 两个 preset 均采用普通 CMake Release 优化，`native` 不额外为其开启 LTO。
-当前仅基础运行时套件加入 Cython；SDK 所有权/重载和 `scale` 编译规模仍是原有实现。
-Cython 代码生成会在构建日志中显示，但尚未将生成耗时和 C++ 编译耗时独立计量。
+基础运行时和 `scale` 编译规模均包含 Cython；SDK 所有权/重载仍是原有实现。
+编译规模分别记录 Cython 代码生成、C++ 编译链接和两者总时间。
 
 ## SDK 重载与所有权实验
 
@@ -145,10 +145,17 @@ pixi run scale --counts 1,10,100,1000 --kind classes --repeats 3 --jobs 2
 ```
 
 自动生成独特模板实例，每个类有构造器和一个方法，所有绑定放在一个翻译单元中。
-每次用构建工具 `clean`，分别测两个模块；nanobind 全量构建包含其静态运行库。
-依赖下载/安装和 CMake configure 不计入构建耗时。随后仅 touch 当前绑定源文件测增量编译。
+三方使用同一生成的 C++ 模板头文件；Cython 类包装持有独立分配的 C++ 对象。
+每次用构建工具 `clean`，分别测三个模块；nanobind 全量构建包含其静态运行库。
+各轮循环轮换 pybind11、nanobind、Cython 的测量顺序。
+依赖下载/安装、测试夹具生成和 CMake configure 不计入构建耗时。
+Cython 先单独构建代码生成目标，再编译链接；各阶段包含 CMake/构建工具启动开销。
+随后仅 touch 当前绑定源文件测增量编译；Cython touch `.pyx`，包含重新生成代码的耗时。
+全量及增量构建后均在新 Python 进程检查所有生成接口，检查时间不计入编译耗时。
 记录新 Python 进程内的模块导入耗时（不含解释器启动）、最终 `.pyd/.so` 大小及重复原始值。
-以 `scale.json` 为原始输出，另存各规模实际编译命令，生成 `summary.csv` 和 `scale.png` 中位数曲线。默认不启用 ccache/sccache；
+以 `scale.json` 为原始输出，另存各规模实际编译命令，生成 `summary.csv`、`report.md` 和 `scale.png` 中位数曲线。
+CSV 同时保存 codegen/compile 及增量阶段中位数，阶段中位数之和不一定等于总耗时中位数；py/nb 的 codegen=0 表示无此阶段。
+报告生成器拒绝缺项或重复的实验；CI Summary 会显示已完成实验的分阶段表格。默认不启用 ccache/sccache；
 正式测量前确认本机编译器未被外部缓存包装。
 
 此处“全量”指干净目标文件构建，**不代表冷文件系统缓存**；动态系统依赖大小不计入模块大小。
@@ -186,11 +193,13 @@ GitHub Actions 配置位于 `.github/workflows/ci.yml`，在 push、PR 和手动
   缺失或失败的套件不会显示为成功，需同时查看 job 状态。
 
 CI 运行器上的计时用于检查测量流程，不设性能阈值，也不用于跨平台性能排名。
-此工作流需推送到 GitHub 后才能验证远端平台；下述记录是本机已完成的验证。
+2026-09-17 已验证远端平台：[CI run 35230995425](https://github.com/miyanyan/python-cpp-binding-bench/actions/runs/35230995425)
+在提交 `ec7541b` 上 15/15 job 成功。三个平台 Python 3.12 的 artifact 已下载核对，
+包括 matched/native 测试、三方运行时报告、三方函数/类规模分阶段报告及 Summary 生成步骤。
 
 本机验证（2026-09-11）：Windows x64 / MSVC 19.51；Python 3.10.21、3.11.16、3.12.14、3.13.15、3.14.7
 在第一版中各通过 20 项正确性测试。Python 3.12 的 matched/native 配置均通过，40 组双库运行时用例和
-函数/类各 1、100 个绑定的规模扫描已完成冒烟验证。Linux/macOS 尚未实际构建验证。
+函数/类各 1、100 个绑定的规模扫描已完成冒烟验证；Linux/macOS 后续验证见上述 CI 记录。
 SDK 扩展后，Python 3.10、3.12、3.14 各通过 50 项正确性测试；3.12 的 matched/native 均通过。
 Cython 3.3.0 基础包装加入后，同三个 Python 版本各通过 72 项测试（含整数边界、
 非本机字节序数组拒绝、回调异常对象保留）；3.12 的 matched/native 均通过。

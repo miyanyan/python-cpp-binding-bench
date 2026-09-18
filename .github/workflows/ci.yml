@@ -111,7 +111,7 @@ jobs:
         if: matrix.python == 'py312'
         run: pixi run --locked -e $env:BENCH_ENVIRONMENT bench-quick --jobs 2
 
-      - name: Function scale smoke test
+      - name: Three-way function scale smoke test
         if: matrix.python == 'py312'
         run: pixi run --locked -e $env:BENCH_ENVIRONMENT scale --counts 1,10 --kind functions --repeats 1 --jobs 2
 
@@ -119,7 +119,7 @@ jobs:
         if: matrix.python == 'py312'
         run: pixi run --locked -e $env:BENCH_ENVIRONMENT bench-sdk-quick --jobs 2
 
-      - name: Class scale smoke test
+      - name: Three-way class scale smoke test
         if: matrix.python == 'py312'
         run: pixi run --locked -e $env:BENCH_ENVIRONMENT scale --counts 1,10 --kind classes --repeats 1 --jobs 2
 
