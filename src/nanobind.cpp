@@ -5,7 +5,18 @@
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/function.h>
 namespace nb = nanobind;
-NB_MODULE(bench_nb, m) {
+#ifndef BENCH_NB_MODULE
+#define BENCH_NB_MODULE bench_nb
+#endif
+#if defined(BENCH_REQUIRE_STABLE) && !defined(Py_LIMITED_API)
+#error Stable ABI requested but Py_LIMITED_API is missing
+#endif
+NB_MODULE(BENCH_NB_MODULE, m) {
+#ifdef Py_LIMITED_API
+    m.attr("abi_floor") = Py_LIMITED_API;
+#else
+    m.attr("abi_floor") = 0;
+#endif
     m.def("noop", &kernel::noop);
     m.def("add", &kernel::add, nb::arg("a"), nb::arg("b"));
     m.def("work", &kernel::work);

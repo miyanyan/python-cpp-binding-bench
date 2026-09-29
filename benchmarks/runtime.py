@@ -10,7 +10,7 @@ def add_cmdline_args(cmd, args):
     cmd.extend(['--backend', args.backend])
 
 runner = pyperf.Runner(add_cmdline_args=add_cmdline_args)
-runner.argparser.add_argument('--backend', choices=['py', 'nb', 'cy'], required=True)
+runner.argparser.add_argument('--backend', choices=['py', 'nb', 'cy', 'nb_abi'], required=True)
 args = runner.parse_args()
 m = importlib.import_module(f'bench_{args.backend}')
 runner.metadata['binding_backend'] = args.backend

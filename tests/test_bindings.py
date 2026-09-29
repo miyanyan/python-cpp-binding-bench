@@ -7,7 +7,7 @@ import pytest
 
 sys.path.insert(0, os.environ['BENCH_MODULE_DIR'])
 
-@pytest.fixture(params=['bench_py', 'bench_nb', 'bench_cy'])
+@pytest.fixture(params=os.environ.get('BENCH_TEST_MODULES', 'bench_py,bench_nb,bench_cy').split(','))
 def mod(request):
     return importlib.import_module(request.param)
 

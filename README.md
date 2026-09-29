@@ -101,6 +101,39 @@ Cython 两个 preset 均采用普通 CMake Release 优化，`native` 不额外�
 基础运行时和 `scale` 编译规模均包含 Cython；SDK 所有权/重载仍是原有实现。
 编译规模分别记录 Cython 代码生成、C++ 编译链接和两者总时间。
 
+## nanobind Stable ABI 对照
+
+只比较同一版本 nanobind 的普通 ABI 与 linked Stable ABI，均使用 `NB_STATIC`，
+同一份 `src/nanobind.cpp` / `src/kernels.h`、相同 preset，保持 GIL。
+这是独立于 pybind11/Cython 三方比较的实验，不使用 split backend。
+
+```sh
+pixi run -e py312 test-abi
+pixi run -e py312 bench-abi-quick
+pixi run -e py312 bench-abi
+pixi run -e py313 bench-abi-quick --reuse build/py312/abi-matched/abi-export/manifest.json --order stable-first
+pixi run -e py314 bench-abi-quick --reuse build/py312/abi-matched/abi-export/manifest.json
+```
+
+普通/Stable 两组各 40 项，复用基础运行时用例，每组在独立 Python 进程执行正确性测试和采样。
+报告位于 `results/abi-<environment>-<profile>-<timestamp>/`，输出 `nb.json`、`nb_abi.json`、
+`comparison.csv`、`report.md`、`abi.png`；CSV 记录绝对额外 ns、耗时增加百分比和各组标准差。
+`overhead = (stable / ordinary - 1) * 100%`，正值表示 Stable 更慢，不能与三方报告的 reduction 符号混用。
+
+使用 `--reuse` 时，只构建当前解释器的普通版本，Stable 二进制从指定 manifest 复制，
+运行前后校验 SHA-256；记录构建 Python、运行 Python、源文件哈希、编译器与实际模块路径。
+重复采样前检查警告，交替执行顺序。比较始终发生在同一运行 Python 内；跨版本复用还包含
+构建时 Python 头文件版本差异，应作为部署配置对照，不能当成严格隔离 ABI 的单变量实验。
+
+CPython 3.12 以下直接报错，不允许 nanobind 静默忽略 `STABLE_ABI`。
+同时检查模块及 nanobind 运行库的 `Py_LIMITED_API=0x030C0000` 编译参数，普通组不得出现此定义。
+Windows 额外使用 `dumpbin` 验证 Stable 仅依赖 `python3.dll`，普通组依赖运行版本对应 DLL；
+所有 Python 开发库（含 SABI）必须来自 pixi。该验证不是完整 wheel 发布或符号合规审计，
+也不承诺跨系统、架构、不同发行版或 free-threaded Python 的复用。
+
+CI 的三个平台均在 Python 3.12 job 中构建 Stable 产物，再用 3.13、3.14 复用它并分别测量；
+结果表沿用 Actions Summary，原始数据和模块文件随 artifact 上传。
+
 ## SDK 重载与所有权实验
 
 ```sh

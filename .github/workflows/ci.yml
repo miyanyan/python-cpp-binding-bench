@@ -123,6 +123,18 @@ jobs:
         if: matrix.python == 'py312'
         run: pixi run --locked -e $env:BENCH_ENVIRONMENT scale --counts 1,10 --kind classes --repeats 1 --jobs 2
 
+      - name: Stable ABI comparison on build Python 3.12
+        if: matrix.python == 'py312'
+        run: pixi run --locked -e py312 bench-abi-quick --jobs 2
+
+      - name: Reuse identical Stable ABI binary on Python 3.13
+        if: matrix.python == 'py312'
+        run: pixi run --locked -e py313 bench-abi-quick --reuse build/py312/abi-matched/abi-export/manifest.json --order stable-first --jobs 2
+
+      - name: Reuse identical Stable ABI binary on Python 3.14
+        if: matrix.python == 'py312'
+        run: pixi run --locked -e py314 bench-abi-quick --reuse build/py312/abi-matched/abi-export/manifest.json --jobs 2
+
       - name: Upload test results and build diagnostics
         id: artifacts
         if: always()
