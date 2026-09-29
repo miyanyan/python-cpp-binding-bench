@@ -134,6 +134,12 @@ Windows 额外使用 `dumpbin` 验证 Stable 仅依赖 `python3.dll`，普通组
 CI 的三个平台均在 Python 3.12 job 中构建 Stable 产物，再用 3.13、3.14 复用它并分别测量；
 结果表沿用 Actions Summary，原始数据和模块文件随 artifact 上传。
 
+2026-09-29 验证：[CI run 36509251480](https://github.com/miyanyan/python-cpp-binding-bench/actions/runs/36509251480)
+在代码提交 `4a4ae77` 上 15/15 job 通过。三个平台的 artifact 均核对了 3.12–3.14 的
+Stable 产物哈希一致，各平台 240 项 ABI 冒烟测量及三个报告齐全。
+本机 Windows matched 的三版本复用和 native 正确性测试也通过；另验证了旧 Python、
+缺少 Limited API 定义及二进制哈希错误会被拒绝。这些仍是冒烟数据，不是固定性能损耗结论。
+
 ## SDK 重载与所有权实验
 
 ```sh
